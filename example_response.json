@@ -1,0 +1,31 @@
+{
+    "Successful": true,
+    "Details": {
+        "Competitor": {
+            "RacerID": "string",
+            "Number": "string",
+            "Transponder": "string",
+            "FirstName": "string",
+            "LastName": "string",
+            "Nationality": "string",
+            "AdditionalData": "string",
+            "ClassID": "string",
+            "Position": "string",
+            "Laps": "string",
+            "TotalTime": "string",
+            "BestPosition": "string",
+            "BestLap": "string",
+            "BestLapTime": "string",
+            "LastLapTime": "string"
+        },
+        "Laps": [
+            {
+                "Lap": "string",
+                "Position": "string",
+                "LapTime": "string",
+                "FlagStatus": "string",
+                "TotalTime": "string"
+            }
+        ]
+    }
+}

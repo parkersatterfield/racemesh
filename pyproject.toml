@@ -1,0 +1,13 @@
+[project]
+name = "racemesh"
+version = "0.1.0"
+description = "Waffle House Lemons car race dashboard using LoRa serial communication to send data from race monitor API to module in car."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "meshtastic>=2.7.5",
+    "pydantic>=2.12.5",
+    "pygame>=2.6.1",
+    "requests>=2.32.5",
+]
