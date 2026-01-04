@@ -3,7 +3,7 @@ import pygame
 import time
 import meshtastic
 import meshtastic.serial_interface
-import subprocess
+import os
 import sys
 
 from constants import Constants
@@ -107,26 +107,28 @@ listener.connect()
 
 
 def check_display_connected():
-    """Check if an HDMI or any display is connected using xrandr."""
+    """Check if a display is connected by inspecting /sys/class/drm/."""
+    drm_path = "/sys/class/drm/"
+    if not os.path.exists(drm_path):
+        # Not on Linux or DRM not available, assume connected
+        return True
     try:
-        result = subprocess.run(["xrandr"], capture_output=True, text=True)
-        if result.returncode == 0:
-            # Parse output for connected displays
-            lines = result.stdout.split("\n")
-            for line in lines:
-                if " connected" in line and (
-                    "HDMI" in line or "DP" in line or "VGA" in line or "DVI" in line
-                ):
-                    return True
+        for item in os.listdir(drm_path):
+            status_file = os.path.join(drm_path, item, "status")
+            if os.path.exists(status_file):
+                with open(status_file, "r") as f:
+                    status = f.read().strip()
+                    if status == "connected":
+                        return True
         return False
-    except FileNotFoundError:
-        # xrandr not available, assume display is connected or handle differently
-        return True  # For Windows or other systems
+    except (OSError, IOError):
+        # If we can't read, assume connected to avoid blocking
+        return True
 
 
 if not check_display_connected():
     print(
-        "Error: No connected display detected. Please connect an HDMI display and try again."
+        "Error: No connected display detected. Please connect a display and try again."
     )
     sys.exit(1)
 
