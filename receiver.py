@@ -7,18 +7,57 @@ import meshtastic.serial_interface
 from constants import Constants
 
 
-# MESHTASTIC CONFIG
-print("Connecting to Meshtastic node...")
-iface = meshtastic.serial_interface.SerialInterface(
-    devPath=Constants.SERIAL_PORT, debugOut=False
-)
+class LoRaListener:
+    def __init__(self, serial_port, on_message_callback):
+        self.serial_port = serial_port
+        self.on_message_callback = on_message_callback
+        self.iface = None
+        self.chunks = {}  # key: message_id, value: list of chunks
 
-# Give the node time to sync
-time.sleep(2)
+    def connect(self):
+        print("Connecting to Meshtastic node...")
+        self.iface = meshtastic.serial_interface.SerialInterface(
+            devPath=self.serial_port, debugOut=False
+        )
+        time.sleep(2)  # Give the node time to sync
+        self.iface.onReceive = self.handle_message
 
+    def handle_message(self, packet):
+        try:
+            text = packet["decoded"]["text"]
+            if text.startswith("CHUNK:"):
+                parts = text.split(":", 2)
 
-# CHUNK HANDLING
-chunks = {}  # key: message_id, value: list of chunks
+                if len(parts) == 3:
+                    chunk_info = parts[1]
+                    chunk_data = parts[2]
+                    idx, total = map(int, chunk_info.split("/"))
+                    message_id = (
+                        f"{packet['from']}_{packet['id']}"  # unique per message
+                    )
+
+                    if message_id not in self.chunks:
+                        self.chunks[message_id] = [None] * total
+                    self.chunks[message_id][idx - 1] = chunk_data
+
+                    if all(c is not None for c in self.chunks[message_id]):
+                        full_message = "".join(self.chunks[message_id])
+                        data = json.loads(full_message)
+                        self.on_message_callback(data)
+                        print("RX assembled and parsed:", data)
+                        del self.chunks[message_id]
+            else:
+                # If not chunked, assume direct JSON
+                data = json.loads(text)
+                self.on_message_callback(data)
+                print("RX parsed:", data)
+
+        except Exception as e:
+            print("Error handling message:", e)
+
+    def close(self):
+        if self.iface:
+            self.iface.close()
 
 
 def parse_time(time_str):
@@ -48,40 +87,21 @@ def parse_race_data(data):
     }
 
 
-def handle_message(packet):
+# Global state
+race_data = None
+last_rx_time = None
+
+
+def update_inputs(message_body):
     global race_data, last_rx_time
-    try:
-        text = packet["decoded"]["text"]
-        if text.startswith("CHUNK:"):
-            parts = text.split(":", 2)
-            if len(parts) == 3:
-                chunk_info = parts[1]
-                chunk_data = parts[2]
-                idx, total = map(int, chunk_info.split("/"))
-                message_id = f"{packet['from']}_{packet['id']}"  # unique per message
-                if message_id not in chunks:
-                    chunks[message_id] = [None] * total
-                chunks[message_id][idx - 1] = chunk_data
-                if all(c is not None for c in chunks[message_id]):
-                    full_message = "".join(chunks[message_id])
-                    data = json.loads(full_message)
-                    parsed_data = parse_race_data(data)
-                    race_data = parsed_data
-                    last_rx_time = time.time()
-                    print("RX assembled and parsed:", parsed_data)
-                    del chunks[message_id]
-        else:
-            # If not chunked, assume direct JSON
-            data = json.loads(text)
-            parsed_data = parse_race_data(data)
-            race_data = parsed_data
-            last_rx_time = time.time()
-            print("RX parsed:", parsed_data)
-    except Exception as e:
-        print("Error handling message:", e)
+    parsed_data = parse_race_data(message_body)
+    race_data = parsed_data
+    last_rx_time = time.time()
 
 
-iface.onReceive = handle_message
+# Initialize LoRa listener
+listener = LoRaListener(Constants.SERIAL_PORT_LINUX, update_inputs)
+listener.connect()
 
 
 # DISPLAY CONFIG
@@ -153,5 +173,5 @@ while running:
 
     clock.tick(10)
 
-iface.close()
+listener.close()
 pygame.quit()

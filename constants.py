@@ -2,7 +2,8 @@ class Constants:
     PROJECT_NAME = "RaceMesh"
     VERSION = "1.0.0"
 
-    SERIAL_PORT = "COM3"  # or /dev/ttyUSB0 on Linux
+    SERIAL_PORT = "COM3"
+    SERIAL_PORT_LINUX = "/dev/ttyUSB0"
     BAUD_RATE = 115200
     SENDER_NODE_ID = "!9e781194"
     RECEIVER_NODE_ID = "!9e77f860"
