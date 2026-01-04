@@ -3,6 +3,8 @@ import pygame
 import time
 import meshtastic
 import meshtastic.serial_interface
+import subprocess
+import sys
 
 from constants import Constants
 
@@ -102,6 +104,31 @@ def update_inputs(message_body):
 # Initialize LoRa listener
 listener = LoRaListener(Constants.SERIAL_PORT_LINUX, update_inputs)
 listener.connect()
+
+
+def check_display_connected():
+    """Check if an HDMI or any display is connected using xrandr."""
+    try:
+        result = subprocess.run(["xrandr"], capture_output=True, text=True)
+        if result.returncode == 0:
+            # Parse output for connected displays
+            lines = result.stdout.split("\n")
+            for line in lines:
+                if " connected" in line and (
+                    "HDMI" in line or "DP" in line or "VGA" in line or "DVI" in line
+                ):
+                    return True
+        return False
+    except FileNotFoundError:
+        # xrandr not available, assume display is connected or handle differently
+        return True  # For Windows or other systems
+
+
+if not check_display_connected():
+    print(
+        "Error: No connected display detected. Please connect an HDMI display and try again."
+    )
+    sys.exit(1)
 
 
 # DISPLAY CONFIG
