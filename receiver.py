@@ -5,8 +5,12 @@ import meshtastic
 import meshtastic.serial_interface
 import os
 import sys
+from pubsub import pub
 
 from constants import Constants
+
+PORT = Constants.SERIAL_PORT if os.name == "nt" else Constants.SERIAL_PORT_LINUX
+print(PORT)
 
 
 class LoRaListener:
@@ -22,40 +26,50 @@ class LoRaListener:
             devPath=self.serial_port, debugOut=False
         )
         time.sleep(2)  # Give the node time to sync
-        self.iface.onReceive = self.handle_message
+        print("Connected.")
+        print("Listening for messages...")
+        pub.subscribe(self.handle_message, "meshtastic.receive")
 
-    def handle_message(self, packet):
-        try:
-            text = packet["decoded"]["text"]
-            if text.startswith("CHUNK:"):
-                parts = text.split(":", 2)
+    def handle_message(self, packet, interface):
+        global last_message
+        decoded = packet.get("decoded", {})
+        if "text" not in decoded:
+            return  # Skip non-text messages
+        text = decoded["text"]
+        if text.startswith("CHUNK:"):
+            parts = text.split(":", 2)
 
-                if len(parts) == 3:
-                    chunk_info = parts[1]
-                    chunk_data = parts[2]
-                    idx, total = map(int, chunk_info.split("/"))
-                    message_id = (
-                        f"{packet['from']}_{packet['id']}"  # unique per message
-                    )
+            if len(parts) == 3:
+                chunk_info = parts[1]
+                chunk_data = parts[2]
+                idx, total = map(int, chunk_info.split("/"))
+                message_id = f"{packet['from']}_{packet['id']}"  # unique per message
 
-                    if message_id not in self.chunks:
-                        self.chunks[message_id] = [None] * total
-                    self.chunks[message_id][idx - 1] = chunk_data
+                if message_id not in self.chunks:
+                    self.chunks[message_id] = [None] * total
+                self.chunks[message_id][idx - 1] = chunk_data
 
-                    if all(c is not None for c in self.chunks[message_id]):
-                        full_message = "".join(self.chunks[message_id])
+                if all(c is not None for c in self.chunks[message_id]):
+                    full_message = "".join(self.chunks[message_id])
+                    try:
                         data = json.loads(full_message)
                         self.on_message_callback(data)
                         print("RX assembled and parsed:", data)
-                        del self.chunks[message_id]
-            else:
-                # If not chunked, assume direct JSON
+                        last_message = "Race data assembled and parsed"
+                    except json.JSONDecodeError:
+                        print("RX assembled raw:", full_message)
+                        last_message = f"Assembled: {full_message}"
+                    del self.chunks[message_id]
+        else:
+            # If not chunked, try to parse as JSON, else display raw
+            try:
                 data = json.loads(text)
                 self.on_message_callback(data)
                 print("RX parsed:", data)
-
-        except Exception as e:
-            print("Error handling message:", e)
+                last_message = "Race data received"
+            except json.JSONDecodeError:
+                print("RX raw:", text)
+                last_message = f"Raw: {text}"
 
     def close(self):
         if self.iface:
@@ -86,12 +100,15 @@ def parse_race_data(data):
         "elapsed": parse_time(competitor.get("TotalTime", "0")),
         "fastest": parse_time(competitor.get("BestLapTime", "0")),
         "laps": [parse_time(lap.get("LapTime", "0")) for lap in laps_data],
+        "ahead": 0.0,  # Placeholder
+        "behind": 0.0,  # Placeholder
     }
 
 
 # Global state
 race_data = None
 last_rx_time = None
+last_message = "Waiting for messages..."
 
 
 def update_inputs(message_body):
@@ -102,7 +119,7 @@ def update_inputs(message_body):
 
 
 # Initialize LoRa listener
-listener = LoRaListener(Constants.SERIAL_PORT_LINUX, update_inputs)
+listener = LoRaListener(PORT, update_inputs)
 listener.connect()
 
 
@@ -125,8 +142,7 @@ def check_display_connected():
         # If we can't read, assume connected to avoid blocking
         return True
 
-
-if not check_display_connected():
+    # if not check_display_connected():
     print(
         "Error: No connected display detected. Please connect a display and try again."
     )
@@ -157,7 +173,6 @@ last_rx_time = None
 
 # DRAW DASHBOARD
 def draw_dashboard(data, age):
-    screen.fill(BLACK)
 
     # Position (big, top-left)
     screen.blit(FONT_XL.render(f"P{data['pos']}", True, WHITE), (20, 20))
@@ -195,10 +210,18 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # Draw if we have data
+    screen.fill(BLACK)
+
     if race_data:
         age = time.time() - last_rx_time
         draw_dashboard(race_data, age)
+    else:
+        screen.blit(FONT_L.render("Waiting for race data...", True, WHITE), (20, 20))
+
+    # Always show last message
+    screen.blit(FONT_S.render(last_message[:50], True, GRAY), (20, 440))
+
+    pygame.display.flip()
 
     clock.tick(10)
 

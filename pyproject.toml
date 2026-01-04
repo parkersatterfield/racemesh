@@ -9,5 +9,6 @@ dependencies = [
     "meshtastic>=2.7.5",
     "pydantic>=2.12.5",
     "pygame>=2.6.1",
+    "pyserial>=3.5",
     "requests>=2.32.5",
 ]
