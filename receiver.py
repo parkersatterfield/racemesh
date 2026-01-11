@@ -57,6 +57,8 @@ class LoRaListener:
                 if len(parts) >= 3:
                     self.temp_data["fastest"] = parts[1]
                     self.temp_data["best_lap"] = parts[2]
+            case s if s.startswith("LAP|"):
+                parts = text.split("|")
                 if len(parts) >= 3:
                     lap_num = parts[1]
                     lap_time_str = parts[2]
@@ -147,24 +149,23 @@ last_rx_time = None
 
 # DRAW DASHBOARD
 def draw_dashboard(data, age):
-
-    # Position (big, top-left) and best position (smaller, next to it)
+    # Position (big, top-left)
     screen.blit(FONT_XL.render(f"P{data['pos']}", True, WHITE), (20, 20))
     screen.blit(
         FONT_S.render(f"(Best: {data.get('best_pos', '-')})", True, GRAY), (160, 40)
     )
 
     # Elapsed (top-right)
-    screen.blit(FONT_L.render(f"ELAPSED {data['elapsed']}", True, WHITE), (480, 30))
+    screen.blit(FONT_M.render(f"ELAPSED {data['elapsed']}", True, WHITE), (480, 30))
 
     # Gaps TODO
     # screen.blit(FONT_L.render(f"AHEAD +{data['ahead']:.2f}", True, WHITE), (20, 130))
     # screen.blit(FONT_L.render(f"BEHIND +{data['behind']:.2f}", True, WHITE), (20, 180))
 
-    # Fastest lap and best lap number
+    # Fastest lap and best lap number (lap number below time)
     screen.blit(FONT_L.render(f"FASTEST {data['fastest']}", True, WHITE), (20, 250))
     screen.blit(
-        FONT_S.render(f"(Lap {data.get('best_lap', '-')})", True, GRAY), (300, 260)
+        FONT_S.render(f"Lap {data.get('best_lap', '-')} ", True, GRAY), (20, 290)
     )
 
     # Last 3 laps
