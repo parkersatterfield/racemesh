@@ -115,8 +115,8 @@ print("Race sender started")
 
 while True:
     try:
-        # race_data = fetch_race_data() # TODO uncomment for live
-        race_data = mock_fetch_race_data()
+        race_data = fetch_race_data()  # TODO uncomment for live
+        # race_data = mock_fetch_race_data()
         send_packet(race_data)
     except Exception as e:
         print("ERROR fetching or sending data:", e)
