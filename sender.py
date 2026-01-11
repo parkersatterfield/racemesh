@@ -96,8 +96,9 @@ def send_packet(packet):
         lap_time = lap.get("LapTime", "0")
         lap_num = lap.get("Lap", "1")
         print(f"lap {lap_num}: {lap_time}")
+        # Use a pipe (|) as delimiter to avoid issues with colons in lap times
         iface.sendText(
-            destinationId=Constants.RECEIVER_NODE_ID, text=f"LAP:{lap_num}:{lap_time}"
+            destinationId=Constants.RECEIVER_NODE_ID, text=f"LAP|{lap_num}|{lap_time}"
         )
         time.sleep(SERIAL_DELAY)
 

@@ -39,21 +39,23 @@ class LoRaListener:
         text = decoded["text"]
         print("RX text:", text)
 
-        if text == "UPDATE":
-            self.temp_data = {}
-            self.temp_laps = []
-            print("Starting new update")
-        elif text.startswith("POS:"):
-            self.temp_data["pos"] = text.split(":", 1)[1]
-        elif text.startswith("ELAPSED:"):
-            self.temp_data["elapsed"] = parse_time(text.split(":", 1)[1])
-        elif text.startswith("FASTEST:"):
-            self.temp_data["fastest"] = parse_time(text.split(":", 1)[1])
-        elif text.startswith("LAP:"):
-            parts = text.split(":")
-            if len(parts) >= 3:
-                lap_time = parse_time(parts[2])
-                self.temp_laps.append(lap_time)
+        match text:
+            case "UPDATE":
+                self.temp_data = {}
+                self.temp_laps = []
+                print("Starting new update")
+            case s if s.startswith("POS:"):
+                self.temp_data["pos"] = text.split(":", 1)[1]
+            case s if s.startswith("ELAPSED:"):
+                self.temp_data["elapsed"] = parse_time(text.split(":", 1)[1])
+            case s if s.startswith("FASTEST:"):
+                self.temp_data["fastest"] = parse_time(text.split(":", 1)[1])
+            case s if s.startswith("LAP|"):
+                parts = text.split("|")
+                if len(parts) >= 3:
+                    lap_num = parts[1]
+                    lap_time_str = parts[2]
+                    self.temp_laps.append({"num": lap_num, "time": lap_time_str})
 
         # Check if we have all data to update (at least pos, elapsed, fastest, and some laps)
         if (
@@ -66,9 +68,7 @@ class LoRaListener:
                 "pos": self.temp_data["pos"],
                 "elapsed": self.temp_data["elapsed"],
                 "fastest": self.temp_data["fastest"],
-                "laps": self.temp_laps[-3:],  # Last 3 laps
-                "ahead": 0.0,
-                "behind": 0.0,
+                "laps": self.temp_laps,
             }
             last_rx_time = time.time()
             print("Race data updated:", race_data)
@@ -164,9 +164,9 @@ def draw_dashboard(data, age):
         FONT_L.render(f"ELAPSED {elapsed//60}:{elapsed%60:02d}", True, WHITE), (480, 30)
     )
 
-    # Gaps
-    screen.blit(FONT_L.render(f"AHEAD +{data['ahead']:.2f}", True, WHITE), (20, 130))
-    screen.blit(FONT_L.render(f"BEHIND +{data['behind']:.2f}", True, WHITE), (20, 180))
+    # Gaps TODO
+    # screen.blit(FONT_L.render(f"AHEAD +{data['ahead']:.2f}", True, WHITE), (20, 130))
+    # screen.blit(FONT_L.render(f"BEHIND +{data['behind']:.2f}", True, WHITE), (20, 180))
 
     # Fastest lap
     screen.blit(FONT_L.render(f"FAST {data['fastest']:.3f}", True, WHITE), (20, 250))
@@ -174,7 +174,8 @@ def draw_dashboard(data, age):
     # Last 3 laps
     for i, lap in enumerate(data["laps"][-3:]):
         screen.blit(
-            FONT_M.render(f"L{i+1}: {lap:.3f}", True, WHITE), (480, 140 + i * 40)
+            FONT_M.render(f"L{lap['num']}: {lap['time']}", True, WHITE),
+            (480, 140 + i * 40),
         )
 
     # Update age
