@@ -14,9 +14,8 @@ print(PORT)
 
 
 class LoRaListener:
-    def __init__(self, serial_port, on_message_callback):
+    def __init__(self, serial_port):
         self.serial_port = serial_port
-        self.on_message_callback = on_message_callback
         self.iface = None
         self.temp_data = {}
         self.temp_laps = []
@@ -56,7 +55,7 @@ class LoRaListener:
                 lap_time = parse_time(parts[2])
                 self.temp_laps.append(lap_time)
 
-        # Check if we have all data to update
+        # Check if we have all data to update (at least pos, elapsed, fastest, and some laps)
         if (
             "pos" in self.temp_data
             and "elapsed" in self.temp_data
@@ -101,7 +100,7 @@ last_message = "Waiting for messages..."
 
 
 # Initialize LoRa listener
-listener = LoRaListener(PORT, None)
+listener = LoRaListener(PORT)
 listener.connect()
 
 

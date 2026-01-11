@@ -59,36 +59,47 @@ def mock_fetch_race_data():
 
 # SEND
 def send_packet(packet):
+    SERIAL_DELAY = 2.5  # seconds
+
     competitor = packet["Details"]["Competitor"]
     laps = packet["Details"]["Laps"]
-
+    print(f"Sending data for competitor: {competitor.get('RacerName', 'Unknown')}")
     # Send update start
     iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text="UPDATE")
-    time.sleep(0.1)
+    time.sleep(SERIAL_DELAY)
 
     # Send position
     pos = competitor.get("Position", "0")
+    print(f"position: {pos}")
     iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"POS:{pos}")
-    time.sleep(0.1)
+    time.sleep(SERIAL_DELAY)
 
     # Send elapsed time
     elapsed = competitor.get("TotalTime", "0")
+    print(f"elapsed time: {elapsed}")
     iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"ELAPSED:{elapsed}")
-    time.sleep(0.1)
+    time.sleep(SERIAL_DELAY)
 
     # Send fastest lap
     fastest = competitor.get("BestLapTime", "0")
+    print(f"best lap: {fastest}")
     iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"FASTEST:{fastest}")
-    time.sleep(0.1)
+    time.sleep(SERIAL_DELAY)
 
-    # Send laps
-    for lap in laps[-3:]:  # Only last 3 laps
+    # Send laps — sort by lap number and send last 3
+    try:
+        sorted_laps = sorted(laps, key=lambda l: int(l.get("Lap", 0)))
+    except Exception:
+        sorted_laps = laps
+
+    for lap in sorted_laps[-3:]:
         lap_time = lap.get("LapTime", "0")
         lap_num = lap.get("Lap", "1")
+        print(f"lap {lap_num}: {lap_time}")
         iface.sendText(
             destinationId=Constants.RECEIVER_NODE_ID, text=f"LAP:{lap_num}:{lap_time}"
         )
-        time.sleep(0.1)
+        time.sleep(SERIAL_DELAY)
 
 
 # MAIN LOOP
