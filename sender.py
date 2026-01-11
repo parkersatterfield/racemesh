@@ -7,6 +7,7 @@ from constants import Constants
 from dto import ApiResponse
 from dotenv import load_dotenv
 import os
+import uuid
 
 
 # CONFIG
@@ -58,19 +59,36 @@ def mock_fetch_race_data():
 
 # SEND
 def send_packet(packet):
-    packet_json = json.dumps(packet)
-    max_chunk_size = 200  # Adjust based on Meshtastic limits
-    chunks = [
-        packet_json[i : i + max_chunk_size]
-        for i in range(0, len(packet_json), max_chunk_size)
-    ]
-    total_chunks = len(chunks)
+    competitor = packet["Details"]["Competitor"]
+    laps = packet["Details"]["Laps"]
 
-    for idx, chunk in enumerate(chunks):
-        message = f"CHUNK:{idx+1}/{total_chunks}:{chunk}"
-        iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=message)
-        print(f"Sent chunk {idx+1}/{total_chunks}: {len(chunk)} bytes")
-        time.sleep(0.1)  # Small delay between chunks to avoid overwhelming
+    # Send update start
+    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text="UPDATE")
+    time.sleep(0.1)
+
+    # Send position
+    pos = competitor.get("Position", "0")
+    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"POS:{pos}")
+    time.sleep(0.1)
+
+    # Send elapsed time
+    elapsed = competitor.get("TotalTime", "0")
+    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"ELAPSED:{elapsed}")
+    time.sleep(0.1)
+
+    # Send fastest lap
+    fastest = competitor.get("BestLapTime", "0")
+    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"FASTEST:{fastest}")
+    time.sleep(0.1)
+
+    # Send laps
+    for lap in laps[-3:]:  # Only last 3 laps
+        lap_time = lap.get("LapTime", "0")
+        lap_num = lap.get("Lap", "1")
+        iface.sendText(
+            destinationId=Constants.RECEIVER_NODE_ID, text=f"LAP:{lap_num}:{lap_time}"
+        )
+        time.sleep(0.1)
 
 
 # MAIN LOOP

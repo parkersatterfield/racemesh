@@ -18,7 +18,8 @@ class LoRaListener:
         self.serial_port = serial_port
         self.on_message_callback = on_message_callback
         self.iface = None
-        self.chunks = {}  # key: message_id, value: list of chunks
+        self.temp_data = {}
+        self.temp_laps = []
 
     def connect(self):
         print("Connecting to Meshtastic node...")
@@ -31,45 +32,48 @@ class LoRaListener:
         pub.subscribe(self.handle_message, "meshtastic.receive")
 
     def handle_message(self, packet, interface):
-        global last_message
+        global last_message, race_data, last_rx_time
+
         decoded = packet.get("decoded", {})
         if "text" not in decoded:
             return  # Skip non-text messages
         text = decoded["text"]
-        if text.startswith("CHUNK:"):
-            parts = text.split(":", 2)
+        print("RX text:", text)
 
-            if len(parts) == 3:
-                chunk_info = parts[1]
-                chunk_data = parts[2]
-                idx, total = map(int, chunk_info.split("/"))
-                message_id = f"{packet['from']}_{packet['id']}"  # unique per message
+        if text == "UPDATE":
+            self.temp_data = {}
+            self.temp_laps = []
+            print("Starting new update")
+        elif text.startswith("POS:"):
+            self.temp_data["pos"] = text.split(":", 1)[1]
+        elif text.startswith("ELAPSED:"):
+            self.temp_data["elapsed"] = parse_time(text.split(":", 1)[1])
+        elif text.startswith("FASTEST:"):
+            self.temp_data["fastest"] = parse_time(text.split(":", 1)[1])
+        elif text.startswith("LAP:"):
+            parts = text.split(":")
+            if len(parts) >= 3:
+                lap_time = parse_time(parts[2])
+                self.temp_laps.append(lap_time)
 
-                if message_id not in self.chunks:
-                    self.chunks[message_id] = [None] * total
-                self.chunks[message_id][idx - 1] = chunk_data
-
-                if all(c is not None for c in self.chunks[message_id]):
-                    full_message = "".join(self.chunks[message_id])
-                    try:
-                        data = json.loads(full_message)
-                        self.on_message_callback(data)
-                        print("RX assembled and parsed:", data)
-                        last_message = "Race data assembled and parsed"
-                    except json.JSONDecodeError:
-                        print("RX assembled raw:", full_message)
-                        last_message = f"Assembled: {full_message}"
-                    del self.chunks[message_id]
-        else:
-            # If not chunked, try to parse as JSON, else display raw
-            try:
-                data = json.loads(text)
-                self.on_message_callback(data)
-                print("RX parsed:", data)
-                last_message = "Race data received"
-            except json.JSONDecodeError:
-                print("RX raw:", text)
-                last_message = f"Raw: {text}"
+        # Check if we have all data to update
+        if (
+            "pos" in self.temp_data
+            and "elapsed" in self.temp_data
+            and "fastest" in self.temp_data
+            and len(self.temp_laps) > 0
+        ):
+            race_data = {
+                "pos": self.temp_data["pos"],
+                "elapsed": self.temp_data["elapsed"],
+                "fastest": self.temp_data["fastest"],
+                "laps": self.temp_laps[-3:],  # Last 3 laps
+                "ahead": 0.0,
+                "behind": 0.0,
+            }
+            last_rx_time = time.time()
+            print("Race data updated:", race_data)
+            last_message = "Race data updated"
 
     def close(self):
         if self.iface:
@@ -90,36 +94,14 @@ def parse_time(time_str):
         return 0.0
 
 
-def parse_race_data(data):
-    """Parse the received JSON data into the format expected by draw_dashboard."""
-    competitor = data.get("Details", {}).get("Competitor", {})
-    laps_data = data.get("Details", {}).get("Laps", [])
-
-    return {
-        "pos": competitor.get("Position", "0"),
-        "elapsed": parse_time(competitor.get("TotalTime", "0")),
-        "fastest": parse_time(competitor.get("BestLapTime", "0")),
-        "laps": [parse_time(lap.get("LapTime", "0")) for lap in laps_data],
-        "ahead": 0.0,  # Placeholder
-        "behind": 0.0,  # Placeholder
-    }
-
-
 # Global state
 race_data = None
 last_rx_time = None
 last_message = "Waiting for messages..."
 
 
-def update_inputs(message_body):
-    global race_data, last_rx_time
-    parsed_data = parse_race_data(message_body)
-    race_data = parsed_data
-    last_rx_time = time.time()
-
-
 # Initialize LoRa listener
-listener = LoRaListener(PORT, update_inputs)
+listener = LoRaListener(PORT, None)
 listener.connect()
 
 

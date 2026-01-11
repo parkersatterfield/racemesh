@@ -2,29 +2,57 @@
     "Successful": true,
     "Details": {
         "Competitor": {
-            "RacerID": "string",
-            "Number": "string",
-            "Transponder": "string",
-            "FirstName": "string",
-            "LastName": "string",
-            "Nationality": "string",
-            "AdditionalData": "string",
-            "ClassID": "string",
-            "Position": "string",
-            "Laps": "string",
-            "TotalTime": "string",
-            "BestPosition": "string",
-            "BestLap": "string",
-            "BestLapTime": "string",
-            "LastLapTime": "string"
+            "RacerID": "1234",
+            "Number": "#1",
+            "Transponder": "1234-56-7890",
+            "FirstName": "Lee",
+            "LastName": "Watterson",
+            "Nationality": "American",
+            "AdditionalData": "VW/WaffleHouese/2011",
+            "ClassID": "6",
+            "Position": "1",
+            "Laps": "56",
+            "TotalTime": "12:34:56.789",
+            "BestPosition": "1",
+            "BestLap": "34",
+            "BestLapTime": "1:23.456",
+            "LastLapTime": "1:24.789"
         },
         "Laps": [
             {
-                "Lap": "string",
-                "Position": "string",
-                "LapTime": "string",
-                "FlagStatus": "string",
-                "TotalTime": "string"
+                "Lap": "1",
+                "Position": "1",
+                "LapTime": "1:25.678",
+                "FlagStatus": "Green",
+                "TotalTime": "1:25.678"
+            },
+            {
+                "Lap": "2",
+                "Position": "1",
+                "LapTime": "1:25.678",
+                "FlagStatus": "Green",
+                "TotalTime": "1:25.678"
+            },
+            {
+                "Lap": "3",
+                "Position": "1",
+                "LapTime": "1:25.678",
+                "FlagStatus": "Green",
+                "TotalTime": "1:25.678"
+            },
+            {
+                "Lap": "4",
+                "Position": "1",
+                "LapTime": "1:25.678",
+                "FlagStatus": "Green",
+                "TotalTime": "1:25.678"
+            },
+            {
+                "Lap": "5",
+                "Position": "1",
+                "LapTime": "1:25.678",
+                "FlagStatus": "Green",
+                "TotalTime": "1:25.678"
             }
         ]
     }
