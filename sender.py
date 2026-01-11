@@ -63,7 +63,9 @@ def send_packet(packet):
 
     competitor = packet["Details"]["Competitor"]
     laps = packet["Details"]["Laps"]
-    print(f"Sending data for competitor: {competitor.get('RacerName', 'Unknown')}")
+    print(
+        f"Sending data for competitor: {competitor.get('LastName', 'Unknown')}, {competitor.get('FirstName', 'Unknown')}"
+    )
     # Send update start
     iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text="UPDATE")
     time.sleep(SERIAL_DELAY)
@@ -80,7 +82,7 @@ def send_packet(packet):
     # Send elapsed time
     elapsed = competitor.get("TotalTime", "0")
     print(f"elapsed time: {elapsed}")
-    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"ELAPSED:{elapsed}")
+    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"ELAPSED|{elapsed}")
     time.sleep(SERIAL_DELAY)
 
     # Send fastest lap and best lap number

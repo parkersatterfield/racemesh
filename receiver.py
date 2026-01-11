@@ -44,6 +44,9 @@ class LoRaListener:
                 self.temp_data = {}
                 self.temp_laps = []
                 print("Starting new update")
+            case s if s.startswith("ELAPSED"):
+                parts = text.split("|")
+                self.temp_data["elapsed"] = parts[1]
             case s if s.startswith("POS|"):
                 parts = text.split("|")
                 if len(parts) >= 3:
