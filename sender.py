@@ -68,10 +68,13 @@ def send_packet(packet):
     iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text="UPDATE")
     time.sleep(SERIAL_DELAY)
 
-    # Send position
+    # Send position and best position
     pos = competitor.get("Position", "0")
-    print(f"position: {pos}")
-    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"POS:{pos}")
+    best_pos = competitor.get("BestPosition", "0")
+    print(f"position: {pos}, best position: {best_pos}")
+    iface.sendText(
+        destinationId=Constants.RECEIVER_NODE_ID, text=f"POS|{pos}|{best_pos}"
+    )
     time.sleep(SERIAL_DELAY)
 
     # Send elapsed time
@@ -80,10 +83,13 @@ def send_packet(packet):
     iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"ELAPSED:{elapsed}")
     time.sleep(SERIAL_DELAY)
 
-    # Send fastest lap
+    # Send fastest lap and best lap number
     fastest = competitor.get("BestLapTime", "0")
-    print(f"best lap: {fastest}")
-    iface.sendText(destinationId=Constants.RECEIVER_NODE_ID, text=f"FASTEST:{fastest}")
+    best_lap = competitor.get("BestLap", "0")
+    print(f"best lap: {fastest} (Lap {best_lap})")
+    iface.sendText(
+        destinationId=Constants.RECEIVER_NODE_ID, text=f"FASTEST|{fastest}|{best_lap}"
+    )
     time.sleep(SERIAL_DELAY)
 
     # Send laps — sort by lap number and send last 3
@@ -96,7 +102,6 @@ def send_packet(packet):
         lap_time = lap.get("LapTime", "0")
         lap_num = lap.get("Lap", "1")
         print(f"lap {lap_num}: {lap_time}")
-        # Use a pipe (|) as delimiter to avoid issues with colons in lap times
         iface.sendText(
             destinationId=Constants.RECEIVER_NODE_ID, text=f"LAP|{lap_num}|{lap_time}"
         )

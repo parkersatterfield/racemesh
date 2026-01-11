@@ -44,14 +44,16 @@ class LoRaListener:
                 self.temp_data = {}
                 self.temp_laps = []
                 print("Starting new update")
-            case s if s.startswith("POS:"):
-                self.temp_data["pos"] = text.split(":", 1)[1]
-            case s if s.startswith("ELAPSED:"):
-                self.temp_data["elapsed"] = parse_time(text.split(":", 1)[1])
-            case s if s.startswith("FASTEST:"):
-                self.temp_data["fastest"] = parse_time(text.split(":", 1)[1])
-            case s if s.startswith("LAP|"):
+            case s if s.startswith("POS|"):
                 parts = text.split("|")
+                if len(parts) >= 3:
+                    self.temp_data["pos"] = parts[1]
+                    self.temp_data["best_pos"] = parts[2]
+            case s if s.startswith("FASTEST|"):
+                parts = text.split("|")
+                if len(parts) >= 3:
+                    self.temp_data["fastest"] = parts[1]
+                    self.temp_data["best_lap"] = parts[2]
                 if len(parts) >= 3:
                     lap_num = parts[1]
                     lap_time_str = parts[2]
@@ -66,8 +68,10 @@ class LoRaListener:
         ):
             race_data = {
                 "pos": self.temp_data["pos"],
+                "best_pos": self.temp_data.get("best_pos", "-"),
                 "elapsed": self.temp_data["elapsed"],
                 "fastest": self.temp_data["fastest"],
+                "best_lap": self.temp_data.get("best_lap", "-"),
                 "laps": self.temp_laps,
             }
             last_rx_time = time.time()
@@ -77,20 +81,6 @@ class LoRaListener:
     def close(self):
         if self.iface:
             self.iface.close()
-
-
-def parse_time(time_str):
-    """Parse time string like '1:23.456' to seconds as float."""
-    if not time_str or time_str == "string":
-        return 0.0
-    try:
-        if ":" in time_str:
-            minutes, seconds = time_str.split(":")
-            return int(minutes) * 60 + float(seconds)
-        else:
-            return float(time_str)
-    except ValueError:
-        return 0.0
 
 
 # Global state
@@ -155,31 +145,34 @@ last_rx_time = None
 # DRAW DASHBOARD
 def draw_dashboard(data, age):
 
-    # Position (big, top-left)
+    # Position (big, top-left) and best position (smaller, next to it)
     screen.blit(FONT_XL.render(f"P{data['pos']}", True, WHITE), (20, 20))
+    screen.blit(
+        FONT_S.render(f"(Best: {data.get('best_pos', '-')})", True, GRAY), (160, 40)
+    )
 
     # Elapsed (top-right)
-    elapsed = int(data["elapsed"])
-    screen.blit(
-        FONT_L.render(f"ELAPSED {elapsed//60}:{elapsed%60:02d}", True, WHITE), (480, 30)
-    )
+    screen.blit(FONT_L.render(f"ELAPSED {data['elapsed']}", True, WHITE), (480, 30))
 
     # Gaps TODO
     # screen.blit(FONT_L.render(f"AHEAD +{data['ahead']:.2f}", True, WHITE), (20, 130))
     # screen.blit(FONT_L.render(f"BEHIND +{data['behind']:.2f}", True, WHITE), (20, 180))
 
-    # Fastest lap
-    screen.blit(FONT_L.render(f"FAST {data['fastest']:.3f}", True, WHITE), (20, 250))
+    # Fastest lap and best lap number
+    screen.blit(FONT_L.render(f"FASTEST {data['fastest']}", True, WHITE), (20, 250))
+    screen.blit(
+        FONT_S.render(f"(Lap {data.get('best_lap', '-')})", True, GRAY), (300, 260)
+    )
 
     # Last 3 laps
-    for i, lap in enumerate(data["laps"][-3:]):
+    for i, lap in enumerate(data["laps"]):
         screen.blit(
             FONT_M.render(f"L{lap['num']}: {lap['time']}", True, WHITE),
             (480, 140 + i * 40),
         )
 
     # Update age
-    color = WHITE if age < 90 else RED
+    color = WHITE if age < 60 else RED
     screen.blit(FONT_S.render(f"UPDATED {int(age)}s AGO", True, color), (20, 420))
 
     pygame.display.flip()
@@ -201,7 +194,7 @@ while running:
         screen.blit(FONT_L.render("Waiting for race data...", True, WHITE), (20, 20))
 
     # Always show last message
-    screen.blit(FONT_S.render(last_message[:50], True, GRAY), (20, 440))
+    # screen.blit(FONT_S.render(last_message[:50], True, GRAY), (20, 440))
 
     pygame.display.flip()
 

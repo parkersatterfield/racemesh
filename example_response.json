@@ -8,49 +8,49 @@
             "FirstName": "Lee",
             "LastName": "Watterson",
             "Nationality": "American",
-            "AdditionalData": "VW/WaffleHouese/2011",
+            "AdditionalData": "VW/WaffleHouse/2011",
             "ClassID": "6",
-            "Position": "1",
-            "Laps": "56",
+            "Position": "2",
+            "Laps": "5",
             "TotalTime": "12:34:56.789",
             "BestPosition": "1",
-            "BestLap": "34",
-            "BestLapTime": "1:23.456",
-            "LastLapTime": "1:24.789"
+            "BestLap": "4",
+            "BestLapTime": "1:24.123",
+            "LastLapTime": "1:24.456"
         },
         "Laps": [
             {
                 "Lap": "1",
                 "Position": "1",
-                "LapTime": "1:25.678",
+                "LapTime": "1:25.123",
                 "FlagStatus": "Green",
                 "TotalTime": "1:25.678"
             },
             {
                 "Lap": "2",
                 "Position": "1",
-                "LapTime": "1:25.678",
+                "LapTime": "1:25.456",
                 "FlagStatus": "Green",
                 "TotalTime": "1:25.678"
             },
             {
                 "Lap": "3",
                 "Position": "1",
-                "LapTime": "1:25.678",
+                "LapTime": "1:25.789",
                 "FlagStatus": "Green",
                 "TotalTime": "1:25.678"
             },
             {
                 "Lap": "4",
                 "Position": "1",
-                "LapTime": "1:25.678",
+                "LapTime": "1:24.123",
                 "FlagStatus": "Green",
                 "TotalTime": "1:25.678"
             },
             {
                 "Lap": "5",
                 "Position": "1",
-                "LapTime": "1:25.678",
+                "LapTime": "1:24.456",
                 "FlagStatus": "Green",
                 "TotalTime": "1:25.678"
             }
