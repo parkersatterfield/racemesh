@@ -94,49 +94,37 @@ last_rx_time = None
 last_message = "Waiting for messages..."
 
 
-# Initialize LoRa listener
-listener = LoRaListener(PORT)
-listener.connect()
+# Set SDL environment variables BEFORE pygame.init()
+os.environ["XDG_RUNTIME_DIR"] = "/tmp"
 
+# Configure for headless system with HDMI display
+os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
+os.environ["KMSDRM_DEVICE"] = "/dev/dri/card0"  # Explicitly use card0 for diet pi
+# Try to force fullscreen mode on the HDMI output
+os.environ["SDL_VIDEO_KMSDRM_DEVINDEX"] = "0"  # Use first DRM device
 
-def check_display_connected():
-    """Check if a display is connected by inspecting /sys/class/drm/."""
-    drm_path = "/sys/class/drm/"
-    if not os.path.exists(drm_path):
-        # Not on Linux or DRM not available, assume connected
-        return True
+print("Configuring display for headless HDMI output...")
+print(f"DRM Device: {os.environ.get('KMSDRM_DEVICE')}")
+
+try:
+    pygame.init()
+    print(f"Pygame initialized with driver: {pygame.display.get_driver()}")
+
+    # Try fullscreen first for headless HDMI
     try:
-        for item in os.listdir(drm_path):
-            status_file = os.path.join(drm_path, item, "status")
-            if os.path.exists(status_file):
-                with open(status_file, "r") as f:
-                    status = f.read().strip()
-                    if status == "connected":
-                        return True
-        return False
-    except (OSError, IOError):
-        # If we can't read, assume connected to avoid blocking
-        return True
+        screen = pygame.display.set_mode((800, 480), pygame.FULLSCREEN)
+        print("✓ Fullscreen display created on HDMI")
+    except:
+        # Fall back to windowed
+        screen = pygame.display.set_mode((800, 480))
+        print("✓ Windowed display created")
 
+    pygame.display.set_caption("Race Dashboard")
 
-if not check_display_connected():
-    print(
-        "Error: No connected display detected. Please connect a display and try again."
-    )
+except Exception as e:
+    print(f"ERROR: Could not initialize display: {e}")
     sys.exit(1)
 
-
-# Set XDG_RUNTIME_DIR for Linux display support
-# if os.name != "nt":
-os.environ["XDG_RUNTIME_DIR"] = "/tmp"
-# Set SDL to use the framebuffer for direct LCD display
-os.environ["SDL_VIDEODRIVER"] = "fbcon"
-os.environ["SDL_FBDEV"] = "/dev/fb0"
-
-# DISPLAY CONFIG
-pygame.init()
-screen = pygame.display.set_mode((800, 480))
-pygame.display.set_caption("Race Dashboard")
 clock = pygame.time.Clock()
 
 FONT_XL = pygame.font.SysFont("monospace", 64, bold=True)
@@ -150,9 +138,9 @@ GRAY = (120, 120, 120)
 RED = (255, 80, 80)
 
 
-# STATE
-race_data = None
-last_rx_time = None
+# Create LoRa listener (will connect in main loop)
+listener = LoRaListener(PORT)
+listener_connected = False
 
 
 # DRAW DASHBOARD
@@ -192,10 +180,20 @@ def draw_dashboard(data, age):
 
 # MAIN LOOP
 running = True
+frame_count = 0
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
+    # Connect to listener on first frame after display is shown
+    if not listener_connected and frame_count == 1:
+        try:
+            listener.connect()
+            listener_connected = True
+        except Exception as e:
+            print(f"Failed to connect to LoRa: {e}")
 
     screen.fill(BLACK)
 
@@ -203,7 +201,12 @@ while running:
         age = time.time() - last_rx_time
         draw_dashboard(race_data, age)
     else:
-        screen.blit(FONT_L.render("Waiting for race data...", True, WHITE), (20, 20))
+        msg = (
+            "Connecting to LoRa..."
+            if not listener_connected
+            else "Waiting for race data..."
+        )
+        screen.blit(FONT_L.render(msg, True, WHITE), (20, 20))
 
     # Always show last message
     # screen.blit(FONT_S.render(last_message[:50], True, GRAY), (20, 440))
@@ -211,6 +214,7 @@ while running:
     pygame.display.flip()
 
     clock.tick(10)
+    frame_count += 1
 
 listener.close()
 pygame.quit()
