@@ -7,7 +7,6 @@ from constants import Constants
 from dto import ApiResponse, SessionResponse
 from dotenv import load_dotenv
 import os
-import uuid
 
 
 # CONFIG
@@ -17,9 +16,12 @@ URL = (
     Constants.API_URL
     + f"racerId={Constants.RACER_ID}&raceId={Constants.RACE_ID}&apiToken={API_TOKEN}"
 )
-SESSION_URL = Constants.API_URL + f"raceId={Constants.RACE_ID}&apiToken={API_TOKEN}"
+SESSION_URL = (
+    Constants.API_URL_SESSION + f"raceId={Constants.RACE_ID}&apiToken={API_TOKEN}"
+)
 print(URL)
 
+SERIAL_DELAY = 2.0  # seconds
 
 # LORA
 print("Connecting to Meshtastic node...")
@@ -133,8 +135,6 @@ def mock_fetch_race_data():
 
 # SEND
 def send_packet(packet):
-    SERIAL_DELAY = 2.5  # seconds
-
     competitor = packet["Details"]["Competitor"]
     laps = packet["Details"]["Laps"]
     print(
@@ -188,8 +188,6 @@ def send_position_packet(position_data):
     """
     Send position data (car ahead and behind) to receiver.
     """
-    SERIAL_DELAY = 2.5  # seconds
-
     my_pos = position_data.get("my_position", "?")
     total = position_data.get("total_in_class", "?")
     car_ahead = position_data.get("car_ahead")
