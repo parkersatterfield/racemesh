@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict
 from pydantic import BaseModel
 
 
@@ -36,3 +36,28 @@ class Details(BaseModel):
 class ApiResponse(BaseModel):
     Successful: bool
     Details: Details
+
+
+class RaceClass(BaseModel):
+    ClassID: str
+    Description: str
+
+
+class Session(BaseModel):
+    RunNumber: str
+    SessionName: str
+    TrackName: str
+    TrackLength: str
+    CurrentTime: str
+    SessionTime: str
+    TimeToGo: str
+    LapsToGo: str
+    FlagStatus: str
+    SortMode: str
+    Classes: Dict[str, RaceClass]
+    Competitors: Dict[str, Competitor]
+
+
+class SessionResponse(BaseModel):
+    Successful: bool
+    Session: Session

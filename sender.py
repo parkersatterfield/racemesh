@@ -4,7 +4,7 @@ import requests
 import meshtastic
 import meshtastic.serial_interface
 from constants import Constants
-from dto import ApiResponse
+from dto import ApiResponse, SessionResponse
 from dotenv import load_dotenv
 import os
 import uuid
@@ -17,6 +17,7 @@ URL = (
     Constants.API_URL
     + f"racerId={Constants.RACER_ID}&raceId={Constants.RACE_ID}&apiToken={API_TOKEN}"
 )
+SESSION_URL = Constants.API_URL + f"raceId={Constants.RACE_ID}&apiToken={API_TOKEN}"
 print(URL)
 
 
@@ -44,6 +45,79 @@ def fetch_race_data():
     if not api_response.Successful:
         raise ValueError("API response indicates failure")
     return api_response.model_dump()
+
+
+def fetch_session_data():
+    """
+    Fetch session data from API, filter by class, and return car ahead and behind.
+    """
+    r = requests.post(SESSION_URL)
+    r.raise_for_status()
+    response = r.json()
+
+    # Parse response into DTO
+    api_response = SessionResponse(**response)
+    if not api_response.Successful:
+        raise ValueError("API response indicates failure")
+
+    session = api_response.Session
+    competitors = session.Competitors
+
+    # Find my competitor data
+    my_competitor = None
+    for comp_id, comp in competitors.items():
+        if comp.RacerID == str(Constants.RACER_ID) or comp.Number == str(
+            Constants.RACER_ID
+        ):
+            my_competitor = comp
+            break
+
+    if not my_competitor:
+        raise ValueError(f"Racer {Constants.RACER_ID} not found in session data")
+
+    my_class_id = my_competitor.ClassID
+
+    # Filter competitors by my class and sort by position
+    class_competitors = [
+        comp
+        for comp in competitors.values()
+        if comp.ClassID == my_class_id and comp.Position
+    ]
+
+    # Sort by position (convert to int for proper sorting)
+    class_competitors.sort(
+        key=lambda c: int(c.Position) if c.Position.isdigit() else 999
+    )
+
+    # Find my position in the sorted list
+    my_position_index = next(
+        (
+            i
+            for i, comp in enumerate(class_competitors)
+            if comp.RacerID == my_competitor.RacerID
+        ),
+        None,
+    )
+
+    car_ahead = None
+    car_behind = None
+
+    if my_position_index is not None:
+        # Car ahead is the one before me in the list (lower index = better position)
+        if my_position_index > 0:
+            car_ahead = class_competitors[my_position_index - 1]
+
+        # Car behind is the one after me in the list
+        if my_position_index < len(class_competitors) - 1:
+            car_behind = class_competitors[my_position_index + 1]
+
+    return {
+        "my_competitor": my_competitor.model_dump(),
+        "car_ahead": car_ahead.model_dump() if car_ahead else None,
+        "car_behind": car_behind.model_dump() if car_behind else None,
+        "my_position": my_competitor.Position,
+        "total_in_class": len(class_competitors),
+    }
 
 
 # MOCK RESPONSE FOR TESTING
@@ -110,15 +184,70 @@ def send_packet(packet):
         time.sleep(SERIAL_DELAY)
 
 
+def send_position_packet(position_data):
+    """
+    Send position data (car ahead and behind) to receiver.
+    """
+    SERIAL_DELAY = 2.5  # seconds
+
+    my_pos = position_data.get("my_position", "?")
+    total = position_data.get("total_in_class", "?")
+    car_ahead = position_data.get("car_ahead")
+    car_behind = position_data.get("car_behind")
+
+    print(f"Position in class: {my_pos}/{total}")
+
+    # Send car ahead info
+    if car_ahead:
+        ahead_name = f"{car_ahead['FirstName']} {car_ahead['LastName']}"
+        ahead_number = car_ahead["Number"]
+        ahead_gap = car_ahead.get("TotalTime", "00:00:00.000")
+        print(f"Car ahead: #{ahead_number} {ahead_name}")
+        iface.sendText(
+            destinationId=Constants.RECEIVER_NODE_ID,
+            text=f"AHEAD|{ahead_number}|{ahead_name}|{ahead_gap}",
+        )
+    else:
+        print("No car ahead (leading the class)")
+        iface.sendText(
+            destinationId=Constants.RECEIVER_NODE_ID,
+            text="AHEAD|NONE|Leading|00:00:00.000",
+        )
+
+    time.sleep(SERIAL_DELAY)
+
+    # Send car behind info
+    if car_behind:
+        behind_name = f"{car_behind['FirstName']} {car_behind['LastName']}"
+        behind_number = car_behind["Number"]
+        behind_gap = car_behind.get("TotalTime", "00:00:00.000")
+        print(f"Car behind: #{behind_number} {behind_name}")
+        iface.sendText(
+            destinationId=Constants.RECEIVER_NODE_ID,
+            text=f"BEHIND|{behind_number}|{behind_name}|{behind_gap}",
+        )
+    else:
+        print("No car behind (last in class)")
+        iface.sendText(
+            destinationId=Constants.RECEIVER_NODE_ID,
+            text="BEHIND|NONE|Last|00:00:00.000",
+        )
+
+    time.sleep(SERIAL_DELAY)
+
+
 # MAIN LOOP
 print("Race sender started")
 
 while True:
     try:
-        race_data = fetch_race_data()  # TODO uncomment for live
         # race_data = mock_fetch_race_data()
+        race_data = fetch_race_data()  # TODO uncomment for live
         send_packet(race_data)
+
+        session_data = fetch_session_data()
+        send_position_packet(session_data)
     except Exception as e:
         print("ERROR fetching or sending data:", e)
 
-    time.sleep(60)
+    time.sleep(15)

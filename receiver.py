@@ -63,6 +63,18 @@ class LoRaListener:
                     lap_num = parts[1]
                     lap_time_str = parts[2]
                     self.temp_laps.append({"num": lap_num, "time": lap_time_str})
+            case s if s.startswith("AHEAD|"):
+                parts = text.split("|")
+                if len(parts) >= 4:
+                    self.temp_data["ahead_number"] = parts[1]
+                    self.temp_data["ahead_name"] = parts[2]
+                    self.temp_data["ahead_gap"] = parts[3]
+            case s if s.startswith("BEHIND|"):
+                parts = text.split("|")
+                if len(parts) >= 4:
+                    self.temp_data["behind_number"] = parts[1]
+                    self.temp_data["behind_name"] = parts[2]
+                    self.temp_data["behind_gap"] = parts[3]
 
         # Check if we have all data to update (at least pos, elapsed, fastest, and some laps)
         if (
@@ -78,6 +90,12 @@ class LoRaListener:
                 "fastest": self.temp_data["fastest"],
                 "best_lap": self.temp_data.get("best_lap", "-"),
                 "laps": self.temp_laps,
+                "ahead_number": self.temp_data.get("ahead_number", "-"),
+                "ahead_name": self.temp_data.get("ahead_name", "-"),
+                "ahead_gap": self.temp_data.get("ahead_gap", "-"),
+                "behind_number": self.temp_data.get("behind_number", "-"),
+                "behind_name": self.temp_data.get("behind_name", "-"),
+                "behind_gap": self.temp_data.get("behind_gap", "-"),
             }
             last_rx_time = time.time()
             print("Race data updated:", race_data)
@@ -154,9 +172,22 @@ def draw_dashboard(data, age):
     # Elapsed (top-right)
     screen.blit(FONT_M.render(f"ELAPSED {data['elapsed']}", True, WHITE), (480, 30))
 
-    # Gaps TODO
-    # screen.blit(FONT_L.render(f"AHEAD +{data['ahead']:.2f}", True, WHITE), (20, 130))
-    # screen.blit(FONT_L.render(f"BEHIND +{data['behind']:.2f}", True, WHITE), (20, 180))
+    # Car ahead and behind
+    ahead_num = data.get("ahead_number", "-")
+    ahead_name = data.get("ahead_name", "-")
+    if ahead_num != "NONE":
+        screen.blit(FONT_L.render(f"AHEAD: #{ahead_num}", True, WHITE), (20, 130))
+        screen.blit(FONT_S.render(f"{ahead_name}", True, GRAY), (20, 170))
+    else:
+        screen.blit(FONT_L.render(f"AHEAD: Leading!", True, WHITE), (20, 130))
+
+    behind_num = data.get("behind_number", "-")
+    behind_name = data.get("behind_name", "-")
+    if behind_num != "NONE":
+        screen.blit(FONT_L.render(f"BEHIND: #{behind_num}", True, WHITE), (400, 130))
+        screen.blit(FONT_S.render(f"{behind_name}", True, GRAY), (400, 170))
+    else:
+        screen.blit(FONT_L.render(f"BEHIND: Last", True, WHITE), (400, 130))
 
     # Fastest lap and best lap number (lap number below time)
     screen.blit(FONT_L.render(f"FASTEST {data['fastest']}", True, WHITE), (20, 250))
