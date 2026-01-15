@@ -127,8 +127,11 @@ if not check_display_connected():
 
 
 # Set XDG_RUNTIME_DIR for Linux display support
-if os.name != "nt":
-    os.environ["XDG_RUNTIME_DIR"] = "/tmp"
+# if os.name != "nt":
+os.environ["XDG_RUNTIME_DIR"] = "/tmp"
+# Set SDL to use the framebuffer for direct LCD display
+os.environ["SDL_VIDEODRIVER"] = "fbcon"
+os.environ["SDL_FBDEV"] = "/dev/fb0"
 
 # DISPLAY CONFIG
 pygame.init()
