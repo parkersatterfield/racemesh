@@ -35,7 +35,7 @@ def fetch_race_data():
     """
     Fetch race data from API and return the full response as DTO.
     """
-    r = requests.get(URL)
+    r = requests.post(URL)
     r.raise_for_status()
     response = r.json()
 

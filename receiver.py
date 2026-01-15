@@ -118,12 +118,17 @@ def check_display_connected():
         # If we can't read, assume connected to avoid blocking
         return True
 
-    # if not check_display_connected():
+
+if not check_display_connected():
     print(
         "Error: No connected display detected. Please connect a display and try again."
     )
     sys.exit(1)
 
+
+# Set XDG_RUNTIME_DIR for Linux display support
+if os.name != "nt":
+    os.environ["XDG_RUNTIME_DIR"] = "/tmp"
 
 # DISPLAY CONFIG
 pygame.init()
