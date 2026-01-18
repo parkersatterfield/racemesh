@@ -159,11 +159,13 @@ FONT_XL = pygame.font.SysFont("monospace", 64, bold=True)
 FONT_L = pygame.font.SysFont("monospace", 36)
 FONT_M = pygame.font.SysFont("monospace", 28)
 FONT_S = pygame.font.SysFont("monospace", 22)
+FONT_XS = pygame.font.SysFont("monospace", 16)
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 GRAY = (120, 120, 120)
 RED = (255, 80, 80)
+GREEN = (80, 255, 80)
 
 
 # Create LoRa listener (will connect in main loop)
@@ -173,51 +175,94 @@ listener_connected = False
 
 # DRAW DASHBOARD
 def draw_dashboard(data, age):
-    # Position (big, top-left)
-    screen.blit(FONT_XL.render(f"P{data['pos']}", True, WHITE), (20, 20))
+    y_pos = 10
+
+    # ========== HEADER SECTION ==========
+    # Position (big, left)
+    screen.blit(FONT_XL.render(f"P{data['pos']}", True, WHITE), (20, y_pos))
     screen.blit(
-        FONT_S.render(f"(Best: {data.get('best_pos', '-')})", True, GRAY), (160, 40)
+        FONT_S.render(f"(Best: {data.get('best_pos', '-')})", True, GRAY),
+        (160, y_pos + 20),
     )
+    # Elapsed (right)
+    screen.blit(FONT_L.render(f"{data['elapsed']}", True, WHITE), (500, y_pos + 10))
 
-    # Elapsed (top-right)
-    screen.blit(FONT_M.render(f"ELAPSED {data['elapsed']}", True, WHITE), (480, 30))
+    y_pos = 100
 
-    # Fastest lap and best lap number (lap number below time)
-    screen.blit(FONT_L.render(f"FASTEST {data['fastest']}", True, WHITE), (20, 130))
+    # ========== LAPS SECTION ==========
+    screen.blit(FONT_S.render("LAPS", True, GRAY), (20, y_pos))
+    y_pos += 35
+
+    # Fastest lap
     screen.blit(
-        FONT_S.render(f"Lap {data.get('best_lap', '-')} ", True, GRAY), (20, 170)
+        FONT_L.render(
+            f"FASTEST {data['fastest']} (L{data.get('best_lap', '-')})", True, WHITE
+        ),
+        (20, y_pos),
     )
+    y_pos += 50
 
-    # Last 3 laps
-    for i, lap in enumerate(data["laps"]):
+    # Last 3 laps in descending order (newest first)
+    laps = data["laps"][-3:]  # Get last 3 laps
+    laps.reverse()  # Reverse to show in descending order (16, 15, 14)
+    best_lap_num = data.get("best_lap", "-")
+    for lap in laps:
+        # Color green if this is the fastest lap
+        lap_color = GREEN if lap["num"] == best_lap_num else WHITE
         screen.blit(
-            FONT_M.render(f"L{lap['num']}: {lap['time']}", True, WHITE),
-            (480, 130 + i * 40),
+            FONT_M.render(f"L{lap['num']}: {lap['time']}", True, lap_color),
+            (20, y_pos),
         )
+        y_pos += 35
 
-    # Car ahead and behind (separate rows)
+    y_pos = 320
+
+    # ========== GAPS SECTION ==========
+    screen.blit(FONT_S.render("GAPS", True, GRAY), (20, y_pos))
+    y_pos += 35
+
+    # Car ahead
     ahead_num = data.get("ahead_number", "-")
     ahead_name = data.get("ahead_name", "-")
+    ahead_gap = data.get("ahead_gap", "-")
     if ahead_num != "NONE":
+        # Display label and car info in white
         screen.blit(
-            FONT_M.render(f"AHEAD: #{ahead_num} {ahead_name}", True, WHITE), (20, 280)
+            FONT_M.render(f"AHEAD: #{ahead_num} {ahead_name} +", True, WHITE),
+            (20, y_pos),
+        )
+        # Display gap time in green
+        gap_x_offset = FONT_M.size(f"AHEAD: #{ahead_num} {ahead_name} +")[0]
+        screen.blit(
+            FONT_M.render(f"{ahead_gap}", True, GREEN),
+            (20 + gap_x_offset, y_pos),
         )
     else:
-        screen.blit(FONT_M.render(f"AHEAD: Leading!", True, WHITE), (20, 280))
+        screen.blit(FONT_M.render(f"AHEAD: Leading!", True, WHITE), (20, y_pos))
+    y_pos += 40
 
+    # Car behind
     behind_num = data.get("behind_number", "-")
     behind_name = data.get("behind_name", "-")
+    behind_gap = data.get("behind_gap", "-")
     if behind_num != "NONE":
+        # Display label and car info in white
         screen.blit(
-            FONT_M.render(f"BEHIND: #{behind_num} {behind_name}", True, WHITE),
-            (20, 330),
+            FONT_M.render(f"BEHIND: #{behind_num} {behind_name} -", True, WHITE),
+            (20, y_pos),
+        )
+        # Display gap time in red
+        gap_x_offset = FONT_M.size(f"BEHIND: #{behind_num} {behind_name} -")[0]
+        screen.blit(
+            FONT_M.render(f"{behind_gap}", True, RED),
+            (20 + gap_x_offset, y_pos),
         )
     else:
-        screen.blit(FONT_M.render(f"BEHIND: Last", True, WHITE), (20, 330))
+        screen.blit(FONT_M.render(f"BEHIND: Last", True, WHITE), (20, y_pos))
 
     # Update age
-    color = WHITE if age < 60 else RED
-    screen.blit(FONT_S.render(f"UPDATED {int(age)}s AGO", True, color), (20, 420))
+    color = GRAY if age < 120 else RED
+    screen.blit(FONT_XS.render(f"Updated {int(age)}s ago", True, color), (20, 450))
 
     pygame.display.flip()
 
