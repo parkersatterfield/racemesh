@@ -1,27 +1,38 @@
-import json
-import pygame
-import time
-import meshtastic
-import meshtastic.serial_interface
 import os
 import sys
+import time
+
+import pygame
+import meshtastic
+import meshtastic.serial_interface
 from pubsub import pub
 
 from constants import Constants
 
-# Set SDL environment variables BEFORE pygame.init()
-os.environ["XDG_RUNTIME_DIR"] = "/tmp"
-
-# Configure for headless system with HDMI display
-os.environ["SDL_VIDEODRIVER"] = "dummy"
-os.environ["KMSDRM_DEVICE"] = "/dev/dri/card0"  # Explicitly use card0 for diet pi
-# Try to force fullscreen mode on the HDMI output
-os.environ["SDL_VIDEO_KMSDRM_DEVINDEX"] = "0"  # Use first DRM device
-
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 PORT = Constants.SERIAL_PORT if os.name == "nt" else Constants.SERIAL_PORT_LINUX
-print(PORT)
+
+# Display settings
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 480
+FRAME_RATE = 30
+
+# Colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+GRAY = (120, 120, 120)
+RED = (255, 80, 80)
+GREEN = (80, 255, 80)
+
+# Data age warning threshold (seconds)
+DATA_STALE_THRESHOLD = 120
 
 
+# =============================================================================
+# LORA COMMUNICATION
+# =============================================================================
 class LoRaListener:
     def __init__(self, serial_port):
         self.serial_port = serial_port
@@ -40,141 +51,195 @@ class LoRaListener:
         pub.subscribe(self.handle_message, "meshtastic.receive")
 
     def handle_message(self, packet, interface):
-        global last_message, race_data, last_rx_time
+        """Handle incoming Meshtastic messages and update race data."""
+        global race_data, last_rx_time
 
         decoded = packet.get("decoded", {})
         if "text" not in decoded:
             return  # Skip non-text messages
+
         text = decoded["text"]
         print("RX text:", text)
 
-        # Initialize race_data if it doesn't exist
+        # Initialize race_data if needed
         if race_data is None:
-            race_data = {
-                "pos": "-",
-                "best_pos": "-",
-                "elapsed": "-",
-                "fastest": "-",
-                "best_lap": "-",
-                "laps": [],
-                "ahead_number": "-",
-                "ahead_name": "-",
-                "ahead_gap": "-",
-                "behind_number": "-",
-                "behind_name": "-",
-                "behind_gap": "-",
-            }
+            race_data = self._create_empty_race_data()
 
+        # Process the message and update timestamp if successful
+        if self._process_message(text, race_data):
+            last_rx_time = time.time()
+
+    def _process_message(self, text, race_data):
+        """Process incoming message and update race data. Returns True if timestamp should update."""
         match text:
             case "UPDATE":
-                self.temp_data = {}
-                self.temp_laps = []
-                race_data["laps"] = []
-                print("Starting new update")
+                self._handle_update(race_data)
+                return False  # UPDATE doesn't update timestamp
             case s if s.startswith("ELAPSED"):
-                parts = text.split("|")
-                race_data["elapsed"] = parts[1]
-                last_rx_time = time.time()
+                return self._handle_elapsed(text, race_data)
             case s if s.startswith("POS|"):
-                parts = text.split("|")
-                if len(parts) >= 3:
-                    race_data["pos"] = parts[1]
-                    race_data["best_pos"] = parts[2]
-                    last_rx_time = time.time()
+                return self._handle_position(text, race_data)
             case s if s.startswith("FASTEST|"):
-                parts = text.split("|")
-                if len(parts) >= 3:
-                    race_data["fastest"] = parts[1]
-                    race_data["best_lap"] = parts[2]
-                    last_rx_time = time.time()
+                return self._handle_fastest(text, race_data)
             case s if s.startswith("LAP|"):
-                parts = text.split("|")
-                if len(parts) >= 3:
-                    lap_num = parts[1]
-                    lap_time_str = parts[2]
-                    race_data["laps"].append({"num": lap_num, "time": lap_time_str})
-                    last_rx_time = time.time()
+                return self._handle_lap(text, race_data)
             case s if s.startswith("AHEAD|"):
-                parts = text.split("|")
-                if len(parts) >= 4:
-                    race_data["ahead_number"] = parts[1]
-                    race_data["ahead_name"] = parts[2]
-                    race_data["ahead_gap"] = parts[3]
-                    last_rx_time = time.time()
-                    print("AHEAD updated:", race_data["ahead_number"])
+                return self._handle_ahead(text, race_data)
             case s if s.startswith("BEHIND|"):
-                parts = text.split("|")
-                if len(parts) >= 4:
-                    race_data["behind_number"] = parts[1]
-                    race_data["behind_name"] = parts[2]
-                    race_data["behind_gap"] = parts[3]
-                    last_rx_time = time.time()
-                    print("BEHIND updated:", race_data["behind_number"])
+                return self._handle_behind(text, race_data)
             case s if s.startswith("QUOTE"):
-                race_data["quote"] = text[6:].strip()  # Everything after "QUOTE "
+                return self._handle_quote(text, race_data)
+            case _:
+                return False
+
+    def _handle_update(self, race_data):
+        """Handle UPDATE message to clear current race data."""
+        self.temp_data = {}
+        self.temp_laps = []
+        race_data["laps"] = []
+        print("Starting new update")
+
+    def _handle_elapsed(self, text, race_data):
+        """Handle ELAPSED message."""
+        parts = text.split("|")
+        if len(parts) >= 2:
+            race_data["elapsed"] = parts[1]
+            return True
+        return False
+
+    def _handle_position(self, text, race_data):
+        """Handle POS message."""
+        parts = text.split("|")
+        if len(parts) >= 3:
+            race_data["pos"] = parts[1]
+            race_data["best_pos"] = parts[2]
+            return True
+        return False
+
+    def _handle_fastest(self, text, race_data):
+        """Handle FASTEST message."""
+        parts = text.split("|")
+        if len(parts) >= 3:
+            race_data["fastest"] = parts[1]
+            race_data["best_lap"] = parts[2]
+            return True
+        return False
+
+    def _handle_lap(self, text, race_data):
+        """Handle LAP message."""
+        parts = text.split("|")
+        if len(parts) >= 3:
+            lap_num = parts[1]
+            lap_time_str = parts[2]
+            race_data["laps"].append({"num": lap_num, "time": lap_time_str})
+            return True
+        return False
+
+    def _handle_ahead(self, text, race_data):
+        """Handle AHEAD message."""
+        parts = text.split("|")
+        if len(parts) >= 4:
+            race_data["ahead_number"] = parts[1]
+            race_data["ahead_name"] = parts[2]
+            race_data["ahead_gap"] = parts[3]
+            print("AHEAD updated:", race_data["ahead_number"])
+            return True
+        return False
+
+    def _handle_behind(self, text, race_data):
+        """Handle BEHIND message."""
+        parts = text.split("|")
+        if len(parts) >= 4:
+            race_data["behind_number"] = parts[1]
+            race_data["behind_name"] = parts[2]
+            race_data["behind_gap"] = parts[3]
+            print("BEHIND updated:", race_data["behind_number"])
+            return True
+        return False
+
+    def _handle_quote(self, text, race_data):
+        """Handle QUOTE message."""
+        race_data["quote"] = text[6:].strip()  # Everything after "QUOTE "
+        return False  # Quotes don't update the data timestamp
+
+    @staticmethod
+    def _create_empty_race_data():
+        """Create an empty race data dictionary with default values."""
+        return {
+            "pos": "-",
+            "best_pos": "-",
+            "elapsed": "-",
+            "fastest": "-",
+            "best_lap": "-",
+            "laps": [],
+            "ahead_number": "-",
+            "ahead_name": "-",
+            "ahead_gap": "-",
+            "behind_number": "-",
+            "behind_name": "-",
+            "behind_gap": "-",
+        }
 
     def close(self):
         if self.iface:
             self.iface.close()
 
 
-# Global state
-race_data = None
-last_rx_time = None
-last_message = "Waiting for messages..."
+# =============================================================================
+# DISPLAY INITIALIZATION
+# =============================================================================
+def setup_sdl_environment():
+    """Configure SDL environment variables for headless HDMI output."""
+    os.environ["XDG_RUNTIME_DIR"] = "/tmp"
+    os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
+    os.environ["KMSDRM_DEVICE"] = "/dev/dri/card0"
+    os.environ["SDL_VIDEO_KMSDRM_DEVINDEX"] = "0"
 
 
-# Set SDL environment variables BEFORE pygame.init()
-os.environ["XDG_RUNTIME_DIR"] = "/tmp"
+def initialize_display():
+    """Initialize pygame display and return screen object."""
+    setup_sdl_environment()
 
-# Configure for headless system with HDMI display
-os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
-os.environ["KMSDRM_DEVICE"] = "/dev/dri/card0"  # Explicitly use card0 for diet pi
-# Try to force fullscreen mode on the HDMI output
-os.environ["SDL_VIDEO_KMSDRM_DEVINDEX"] = "0"  # Use first DRM device
+    print("Configuring display for headless HDMI output...")
+    print(f"DRM Device: {os.environ.get('KMSDRM_DEVICE')}")
 
-print("Configuring display for headless HDMI output...")
-print(f"DRM Device: {os.environ.get('KMSDRM_DEVICE')}")
-
-try:
-    pygame.init()
-    print(f"Pygame initialized with driver: {pygame.display.get_driver()}")
-
-    # Try fullscreen first for headless HDMI
     try:
-        screen = pygame.display.set_mode((800, 480), pygame.FULLSCREEN)
-        print("✓ Fullscreen display created on HDMI")
-    except:
-        # Fall back to windowed
-        screen = pygame.display.set_mode((800, 480))
-        print("✓ Windowed display created")
+        pygame.init()
+        print(f"Pygame initialized with driver: {pygame.display.get_driver()}")
 
-    pygame.display.set_caption("Race Dashboard")
+        # Try fullscreen first for headless HDMI
+        try:
+            screen = pygame.display.set_mode(
+                (SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN
+            )
+            print("✓ Fullscreen display created on HDMI")
+        except:
+            # Fall back to windowed
+            screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+            print("✓ Windowed display created")
 
-except Exception as e:
-    print(f"ERROR: Could not initialize display: {e}")
-    sys.exit(1)
+        pygame.display.set_caption("Race Dashboard")
+        return screen
 
-clock = pygame.time.Clock()
-
-FONT_XL = pygame.font.SysFont("monospace", 64, bold=True)
-FONT_L = pygame.font.SysFont("monospace", 36)
-FONT_M = pygame.font.SysFont("monospace", 28)
-FONT_S = pygame.font.SysFont("monospace", 22)
-FONT_XS = pygame.font.SysFont("monospace", 16)
-
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-GRAY = (120, 120, 120)
-RED = (255, 80, 80)
-GREEN = (80, 255, 80)
+    except Exception as e:
+        print(f"ERROR: Could not initialize display: {e}")
+        sys.exit(1)
 
 
-# Create LoRa listener (will connect in main loop)
-listener = LoRaListener(PORT)
-listener_connected = False
+def create_fonts():
+    """Create and return font objects."""
+    return {
+        "xl": pygame.font.SysFont("monospace", 64, bold=True),
+        "l": pygame.font.SysFont("monospace", 36),
+        "m": pygame.font.SysFont("monospace", 28),
+        "s": pygame.font.SysFont("monospace", 22),
+        "xs": pygame.font.SysFont("monospace", 16),
+    }
 
 
+# =============================================================================
+# RENDERING UTILITIES
+# =============================================================================
 def wrap_text(text, font, max_width):
     """Wrap text to fit within max_width pixels."""
     words = text.split(" ")
@@ -202,29 +267,29 @@ def wrap_text(text, font, max_width):
     return lines
 
 
-# DRAW DASHBOARD
-def draw_dashboard(data, age):
+def draw_dashboard(screen, fonts, data, age):
+    """Render the race dashboard to the screen."""
     y_pos = 10
 
     # ========== HEADER SECTION ==========
     # Position (big, left)
-    screen.blit(FONT_XL.render(f"P{data['pos']}", True, WHITE), (20, y_pos))
+    screen.blit(fonts["xl"].render(f"P{data['pos']}", True, WHITE), (20, y_pos))
     screen.blit(
-        FONT_S.render(f"(Best: {data.get('best_pos', '-')})", True, GRAY),
+        fonts["s"].render(f"(Best: {data.get('best_pos', '-')})", True, GRAY),
         (160, y_pos + 20),
     )
     # Elapsed (right)
-    screen.blit(FONT_L.render(f"{data['elapsed']}", True, WHITE), (500, y_pos + 10))
+    screen.blit(fonts["l"].render(f"{data['elapsed']}", True, WHITE), (500, y_pos + 10))
 
     y_pos = 100
 
     # ========== LAPS SECTION ==========
-    screen.blit(FONT_S.render("LAPS", True, GRAY), (20, y_pos))
+    screen.blit(fonts["s"].render("LAPS", True, GRAY), (20, y_pos))
     y_pos += 35
 
     # Fastest lap
     screen.blit(
-        FONT_L.render(
+        fonts["l"].render(
             f"FASTEST {data['fastest']} (L{data.get('best_lap', '-')})", True, WHITE
         ),
         (20, y_pos),
@@ -233,13 +298,12 @@ def draw_dashboard(data, age):
 
     # Last 3 laps in descending order (newest first)
     laps = data["laps"][-3:]  # Get last 3 laps
-    laps.reverse()  # Reverse to show in descending order (16, 15, 14)
+    laps.reverse()
     best_lap_num = data.get("best_lap", "-")
     for lap in laps:
-        # Color green if this is the fastest lap
         lap_color = GREEN if lap["num"] == best_lap_num else WHITE
         screen.blit(
-            FONT_M.render(f"L{lap['num']}: {lap['time']}", True, lap_color),
+            fonts["m"].render(f"L{lap['num']}: {lap['time']}", True, lap_color),
             (20, y_pos),
         )
         y_pos += 35
@@ -247,7 +311,7 @@ def draw_dashboard(data, age):
     y_pos = 320
 
     # ========== GAPS SECTION ==========
-    screen.blit(FONT_S.render("GAPS", True, GRAY), (20, y_pos))
+    screen.blit(fonts["s"].render("GAPS", True, GRAY), (20, y_pos))
     y_pos += 35
 
     # Car ahead
@@ -257,17 +321,17 @@ def draw_dashboard(data, age):
     if ahead_num != "NONE":
         # Display label and car info in white
         screen.blit(
-            FONT_M.render(f"AHEAD: #{ahead_num} {ahead_name} +", True, WHITE),
+            fonts["m"].render(f"AHEAD: #{ahead_num} {ahead_name} +", True, WHITE),
             (20, y_pos),
         )
         # Display gap time in green
-        gap_x_offset = FONT_M.size(f"AHEAD: #{ahead_num} {ahead_name} +")[0]
+        gap_x_offset = fonts["m"].size(f"AHEAD: #{ahead_num} {ahead_name} +")[0]
         screen.blit(
-            FONT_M.render(f"{ahead_gap}", True, GREEN),
+            fonts["m"].render(f"{ahead_gap}", True, GREEN),
             (20 + gap_x_offset, y_pos),
         )
     else:
-        screen.blit(FONT_M.render(f"AHEAD: Leading!", True, WHITE), (20, y_pos))
+        screen.blit(fonts["m"].render(f"AHEAD: Leading!", True, WHITE), (20, y_pos))
     y_pos += 40
 
     # Car behind
@@ -275,72 +339,98 @@ def draw_dashboard(data, age):
     behind_name = data.get("behind_name", "-")
     behind_gap = data.get("behind_gap", "-")
     if behind_num != "NONE":
-        # Display label and car info in white
         screen.blit(
-            FONT_M.render(f"BEHIND: #{behind_num} {behind_name} -", True, WHITE),
+            fonts["m"].render(f"BEHIND: #{behind_num} {behind_name} -", True, WHITE),
             (20, y_pos),
         )
         # Display gap time in red
-        gap_x_offset = FONT_M.size(f"BEHIND: #{behind_num} {behind_name} -")[0]
+        gap_x_offset = fonts["m"].size(f"BEHIND: #{behind_num} {behind_name} -")[0]
         screen.blit(
-            FONT_M.render(f"{behind_gap}", True, RED),
+            fonts["m"].render(f"{behind_gap}", True, RED),
             (20 + gap_x_offset, y_pos),
         )
     else:
-        screen.blit(FONT_M.render(f"BEHIND: Last", True, WHITE), (20, y_pos))
+        screen.blit(fonts["m"].render(f"BEHIND: Last", True, WHITE), (20, y_pos))
+    y_pos += 50
 
-    # Motivational Quote
+    # ========== MOTIVATION SECTION ==========
     quote = data.get("quote", None)
     if quote:
-        screen.blit(FONT_S.render("MOTIVATION", True, GRAY), (20, 430))
+        screen.blit(fonts["s"].render("MOTIVATION", True, GRAY), (20, y_pos))
+        y_pos += 35
         # Wrap the quote text to fit screen width (760 pixels for padding)
-        wrapped_lines = wrap_text(quote, FONT_S, 760)
-        quote_y = 455
+        wrapped_lines = wrap_text(quote, fonts["s"], 760)
         for line in wrapped_lines[:2]:  # Limit to 2 lines to avoid overflow
-            screen.blit(FONT_S.render(line, True, WHITE), (20, quote_y))
-            quote_y += 25
+            screen.blit(fonts["s"].render(line, True, WHITE), (20, y_pos))
+            y_pos += 25
 
     # Update age
-    color = GRAY if age < 120 else RED
-    screen.blit(FONT_XS.render(f"Updated {int(age)}s ago", True, color), (20, 520))
+    y_pos += 40
+    color = GRAY if age < DATA_STALE_THRESHOLD else RED
+    screen.blit(
+        fonts["xs"].render(f"Updated {int(age)}s ago", True, color), (20, y_pos)
+    )
 
-    pygame.display.flip()
+
+# =============================================================================
+# MAIN APPLICATION
+# =============================================================================
+def main():
+    """Main application loop."""
+    global race_data, last_rx_time
+
+    # Initialize display and fonts
+    screen = initialize_display()
+    fonts = create_fonts()
+    clock = pygame.time.Clock()
+
+    # Initialize LoRa listener
+    listener = LoRaListener(PORT)
+    listener_connected = False
+
+    # Global state
+    race_data = None
+    last_rx_time = None
+
+    running = True
+    frame_count = 0
+
+    try:
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+
+            # Connect to listener on first frame after display is shown
+            if not listener_connected and frame_count == 1:
+                try:
+                    listener.connect()
+                    listener_connected = True
+                except Exception as e:
+                    print(f"Failed to connect to LoRa: {e}")
+
+            # Render dashboard or waiting message
+            screen.fill(BLACK)
+            if race_data and last_rx_time:
+                age = time.time() - last_rx_time
+                draw_dashboard(screen, fonts, race_data, age)
+            else:
+                msg = (
+                    "Connecting to LoRa..."
+                    if not listener_connected
+                    else "Waiting for race data..."
+                )
+                screen.blit(fonts["l"].render(msg, True, WHITE), (20, 20))
+
+            pygame.display.update()
+            clock.tick(FRAME_RATE)
+            frame_count += 1
+
+    finally:
+        listener.close()
+        pygame.quit()
 
 
-# MAIN LOOP
-running = True
-frame_count = 0
-
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    # Connect to listener on first frame after display is shown
-    if not listener_connected and frame_count == 1:
-        try:
-            listener.connect()
-            listener_connected = True
-        except Exception as e:
-            print(f"Failed to connect to LoRa: {e}")
-
-    if race_data and last_rx_time:
-        screen.fill(BLACK)
-        age = time.time() - last_rx_time
-        draw_dashboard(race_data, age)
-        pygame.display.update()
-    else:
-        screen.fill(BLACK)
-        msg = (
-            "Connecting to LoRa..."
-            if not listener_connected
-            else "Waiting for race data..."
-        )
-        screen.blit(FONT_L.render(msg, True, WHITE), (20, 20))
-        pygame.display.update()
-
-    clock.tick(30)
-    frame_count += 1
-
-listener.close()
-pygame.quit()
+if __name__ == "__main__":
+    print(f"Using serial port: {PORT}")
+    main()
