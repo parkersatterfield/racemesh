@@ -110,6 +110,8 @@ class LoRaListener:
                     race_data["behind_gap"] = parts[3]
                     last_rx_time = time.time()
                     print("BEHIND updated:", race_data["behind_number"])
+            case s if s.startswith("QUOTE"):
+                race_data["quote"] = text[6:].strip()  # Everything after "QUOTE "
 
     def close(self):
         if self.iface:
@@ -171,6 +173,33 @@ GREEN = (80, 255, 80)
 # Create LoRa listener (will connect in main loop)
 listener = LoRaListener(PORT)
 listener_connected = False
+
+
+def wrap_text(text, font, max_width):
+    """Wrap text to fit within max_width pixels."""
+    words = text.split(" ")
+    lines = []
+    current_line = []
+
+    for word in words:
+        # Try adding the word to current line
+        test_line = " ".join(current_line + [word])
+        if font.size(test_line)[0] <= max_width:
+            current_line.append(word)
+        else:
+            # Start a new line if current line has words
+            if current_line:
+                lines.append(" ".join(current_line))
+                current_line = [word]
+            else:
+                # Single word is too long, add it anyway
+                lines.append(word)
+
+    # Add remaining words
+    if current_line:
+        lines.append(" ".join(current_line))
+
+    return lines
 
 
 # DRAW DASHBOARD
@@ -260,9 +289,20 @@ def draw_dashboard(data, age):
     else:
         screen.blit(FONT_M.render(f"BEHIND: Last", True, WHITE), (20, y_pos))
 
+    # Motivational Quote
+    quote = data.get("quote", None)
+    if quote:
+        screen.blit(FONT_S.render("MOTIVATION", True, GRAY), (20, 430))
+        # Wrap the quote text to fit screen width (760 pixels for padding)
+        wrapped_lines = wrap_text(quote, FONT_S, 760)
+        quote_y = 455
+        for line in wrapped_lines[:2]:  # Limit to 2 lines to avoid overflow
+            screen.blit(FONT_S.render(line, True, WHITE), (20, quote_y))
+            quote_y += 25
+
     # Update age
     color = GRAY if age < 120 else RED
-    screen.blit(FONT_XS.render(f"Updated {int(age)}s ago", True, color), (20, 450))
+    screen.blit(FONT_XS.render(f"Updated {int(age)}s ago", True, color), (20, 520))
 
     pygame.display.flip()
 
@@ -298,9 +338,6 @@ while running:
         )
         screen.blit(FONT_L.render(msg, True, WHITE), (20, 20))
         pygame.display.update()
-
-    # Always show last message
-    # screen.blit(FONT_S.render(last_message[:50], True, GRAY), (20, 440))
 
     clock.tick(30)
     frame_count += 1
