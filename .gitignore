@@ -10,3 +10,9 @@ wheels/
 .venv
 
 .env
+
+# JavaScript/Bun
+node_modules/
+bun.lockb
+web/dist/
+web/.env

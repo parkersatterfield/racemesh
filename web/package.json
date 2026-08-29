@@ -1,0 +1,15 @@
+{
+  "name": "racemesh-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun scripts/build.js",
+    "start": "bun server/index.js",
+    "dev": "bun --watch server/index.js"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

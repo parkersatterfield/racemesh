@@ -8,7 +8,7 @@ class Constants:
     SENDER_NODE_ID = "!9e781194"
     RECEIVER_NODE_ID = "!9e77f860"
 
-    RACER_ID = 651  # 71011022  # either car number or transponder number
-    RACE_ID = 37820  # 151697
+    RACER_ID = 247  # 71011022  # either car number or transponder number
+    RACE_ID = 162584  # 151697
     API_URL = "https://api.race-monitor.com/v2/Live/GetRacer?"
     API_URL_SESSION = "https://api.race-monitor.com/v2/Live/GetSession?"
