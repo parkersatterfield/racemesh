@@ -245,7 +245,8 @@ while True:
 
         session_data = fetch_session_data()
         send_position_packet(session_data)
+        print("=====================")
     except Exception as e:
         print("ERROR fetching or sending data:", e)
 
-    time.sleep(15)
+    time.sleep(30)

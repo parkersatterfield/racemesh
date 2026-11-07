@@ -1,81 +1,49 @@
-# RaceMesh 🏁
+# RaceMesh
 
-**Real-time race telemetry over LoRa for the 24 Hours of Lemons endurance racing series!**
+RaceMesh is a race-day web dashboard for 24 Hours of Lemons timing data. The current app runs as a Bun service that keeps Race Monitor credentials server-side, fetches live racer/session data, and serves a fullscreen React dashboard for tablets, phones, and crew laptops.
 
-RaceMesh bridges the gap between the paddock's WiFi-connected computers and the high-speed chaos of the track. Send live race data from the pits to your car's dashboard using Meshtastic-powered LoRa communication, keeping drivers informed without relying on spotty cellular signals or expensive telemetry systems.
+The original LoRa/Pygame implementation has been archived in `LoRA/`.
 
+## Web App
 
-## 🚀 Features
+All active development lives in `web/`.
 
-- **Wireless Telemetry**: Fetch real-time race data from the Race-Monitor API and transmit it over LoRa using Meshtastic firmware.
-- **Chunked Messaging**: Handles large payloads by splitting data into manageable chunks for reliable transmission.
-- **Live Dashboard**: Display position, elapsed time, fastest laps, and recent lap times on a Pygame-powered in-car screen.
-- **Robust Parsing**: Automatically parses API responses into display-ready formats.
-- **Endurance Ready**: Designed for 24-hour races with minimal power consumption and reliable long-range communication.
-
-## 🛠️ Hardware Requirements
-
-- **Sender Setup** (Paddock):
-  - Computer with WiFi (e.g., laptop or Raspberry Pi).
-  - Heltec v3 LoRa module with Meshtastic firmware.
-
-- **Receiver Setup** (In-Car):
-  - Raspberry Pi (or similar) with display (800x480 resolution recommended).
-  - Heltec v3 LoRa module with Meshtastic firmware.
-  - Optional: Touchscreen for future interactivity.
-
-## 🚗 Usage
-
-### Sender (Paddock)
-Run the sender to fetch and transmit race data every 60 seconds:
 ```bash
-uv run sender.py
+cd web
+bun install
+cp .env.example .env
+bun run build
+bun run start
 ```
-- Fetches data from the API (or uses mock data for testing).
-- Sends chunked messages to the receiver node.
 
-### Receiver (In-Car)
-Run the receiver to listen for messages and display the dashboard:
+Open `http://localhost:3000`.
+
+For development, rebuild the frontend after UI changes and restart or run the Bun server in watch mode:
+
 ```bash
-uv run receiver.py
+bun run build
+bun run dev
 ```
-- Receives and reassembles chunked data.
-- Displays live race info on the screen.
 
-### Testing
-- Use `mock_fetch_race_data()` in `sender.py` for offline testing.
-- Monitor console output for sent/received messages.
+## Configuration
 
-## 📊 Data Flow
+The Bun server reads configuration from shell environment variables, `web/.env`, or the root `.env`. Values set in the shell override `web/.env`, and `web/.env` overrides the root `.env`.
 
-1. **Sender**: API → Parse → Chunk → LoRa Transmit
-2. **Receiver**: LoRa Receive → Reassemble → Parse → Display
+- `RACE_MONITOR_API_TOKEN`
+- `RACE_MONITOR_RACE_ID`
+- `RACE_MONITOR_RACER_ID`
+- `POLL_INTERVAL_SECONDS`, default `15`
+- `PORT`, default `3000`
 
-Payloads are JSON-based, with automatic chunking for sizes >200 bytes.
+For local compatibility with the old Python `.env`, `API_TOKEN`, `RACE_ID`, and `RACER_ID` are also accepted as fallbacks. `.env.example` is only a template and is not read by the app.
 
-## 🐛 Troubleshooting
+## API
 
-- **No Messages Received?** Check node IDs, serial ports, and Meshtastic device pairing.
-- **Display Issues?** Ensure Pygame is installed and the Pi has a compatible screen.
-- **API Errors?** Verify your API token and racer/race IDs.
-- **Chunking Problems?** Adjust `max_chunk_size` in `sender.py` based on your LoRa settings.
+- `GET /api/dashboard` returns normalized dashboard data for the driver display.
+- `GET /api/health` returns service health and cache status.
 
-## 🤝 Contributing
+The API returns display-ready data instead of raw Race Monitor responses, and it caches successful fetches so multiple viewers share one Race Monitor polling cadence.
 
-Contributions welcome! Fork the repo, make changes, and submit a PR. Ideas:
-- Add gap calculations (ahead/behind).
-- Implement touchscreen controls.
-- Optimize for battery-powered receivers.
+## Legacy LoRa Archive
 
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 🏎️ About 24 Hours of Lemons
-
-[24 Hours of Lemons](https://24hoursoflemons.com/) is a hilarious, low-budget endurance racing series where teams build cars from junkyard parts. RaceMesh keeps you in the loop without the luxury of modern telemetry!
-
----
-
-**Gear up, pit crew! May your packets be strong and your laps be fast. 🏁**</content>
-<parameter name="filePath">c:\Users\Parker\Repos\racemesh\README.md
+`LoRA/` contains the original Python scripts that fetched Race Monitor data, transmitted compact messages over Meshtastic LoRa, and rendered a Pygame dashboard in the car. It is preserved for reference only and is not maintained as the active runtime.
